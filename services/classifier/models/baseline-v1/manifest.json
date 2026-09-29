@@ -1,0 +1,14 @@
+{
+  "artifact_sha256": "4a5ace46a3b8325d98f5fffd3a43a52b116b9a925e9ed4de5aeca30809d8cd0f",
+  "known_bad_fixture": false,
+  "label_schema_version": "1.0",
+  "model_id": "home-service-classifier",
+  "model_version": "baseline-v1",
+  "python_version": "3.12.8",
+  "random_seed": 1729,
+  "scikit_learn_version": "1.6.0",
+  "training_dataset_sha256": "1ecd3b9e371b69cb80297d566b0af86f96c4629f9e898cb8d1cb5adf91ff3fbe",
+  "training_sources": {
+    "train.jsonl": "abf4d8413cbe099f966dcf4714501862dc543fcfad09fdb0bdf0ceb80bd5de77"
+  }
+}

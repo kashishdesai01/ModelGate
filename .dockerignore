@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+artifacts
+services/classifier/models
+services/classifier/**/*.egg-info
+services/classifier/**/__pycache__
+services/classifier/.mypy_cache
+services/classifier/.pytest_cache
+services/classifier/.ruff_cache
+**/*.pyc

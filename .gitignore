@@ -1,0 +1,12 @@
+.venv/
+.env
+.DS_Store
+coverage.out
+*.prof
+services/classifier/*.egg-info/
+**/__pycache__/
+services/classifier/.mypy_cache/
+services/classifier/.pytest_cache/
+services/classifier/.ruff_cache/
+artifacts/load-test-*.json
+!artifacts/load-test-latest.json

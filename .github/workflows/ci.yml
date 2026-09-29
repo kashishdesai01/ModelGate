@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_USER: modelgate
+          POSTGRES_PASSWORD: modelgate
+          POSTGRES_DB: modelgate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U modelgate -d modelgate_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26.8"
+          cache: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12.8"
+          cache: pip
+      - name: Install Python dependencies
+        run: pip install -e 'services/classifier[dev]'
+      - name: Formatting, linting, and type checking
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go vet ./...
+          cd services/classifier
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy app training
+          python -m ruff check ../../scripts/assert_known_bad_report.py ../../scripts/load_test.py ../../scripts/test_load_test.py
+          python -m ruff format --check ../../scripts/assert_known_bad_report.py ../../scripts/load_test.py ../../scripts/test_load_test.py
+      - name: Go unit, race, and integration tests
+        env:
+          MODEL_GATE_TEST_DATABASE_URL: postgres://modelgate:modelgate@localhost:5432/modelgate_test?sslmode=disable
+          MODEL_GATE_TEST_REDIS_ADDR: localhost:6379
+        run: go test -race ./... -count=1
+      - name: Python tests
+        run: |
+          python -m unittest scripts.test_load_test
+          cd services/classifier
+          python -m pytest -q
+      - name: Dependency vulnerability audit
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+          python -m pip_audit --skip-editable
+      - name: Generate reproducible data and models
+        run: |
+          python -m training.generate_data --output-dir datasets
+          cd services/classifier
+          python -m training.train --dataset-dir ../../datasets --model-dir models
+          cd ../..
+          git diff --exit-code -- datasets services/classifier/models
+      - name: Start classifier for evaluation
+        working-directory: services/classifier
+        env:
+          MODEL_DIR: models
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/classifier.log 2>&1 &
+          for i in $(seq 1 30); do curl --fail --silent http://127.0.0.1:8000/readyz && exit 0; sleep 1; done
+          cat /tmp/classifier.log
+          exit 1
+      - name: Evaluation gate passes valid candidate
+        run: go run ./cmd/modelgate eval --dataset datasets/golden.jsonl --classifier-url http://127.0.0.1:8000 --baseline baseline-v1 --candidate candidate-v2 --output artifacts/eval-pass
+      - name: Evaluation gate rejects known-bad candidate
+        run: |
+          if go run ./cmd/modelgate eval --dataset datasets/golden.jsonl --classifier-url http://127.0.0.1:8000 --baseline baseline-v1 --candidate known-bad-v1 --output artifacts/eval-known-bad; then
+            echo 'known-bad candidate unexpectedly passed'
+            exit 1
+          fi
+          python scripts/assert_known_bad_report.py artifacts/eval-known-bad/report.json
+      - name: Upload evaluation reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: evaluation-reports
+          path: artifacts/
+      - name: Build deployable containers
+        run: docker compose build

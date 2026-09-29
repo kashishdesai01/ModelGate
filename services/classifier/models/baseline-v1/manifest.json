@@ -1,5 +1,5 @@
 {
-  "artifact_sha256": "4a5ace46a3b8325d98f5fffd3a43a52b116b9a925e9ed4de5aeca30809d8cd0f",
+  "artifact_sha256": "31155f29c9e66d449bd5913367172318b6e109e8ede39c72bf0862722f220783",
   "known_bad_fixture": false,
   "label_schema_version": "1.0",
   "model_id": "home-service-classifier",

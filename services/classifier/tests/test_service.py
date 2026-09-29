@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import joblib
+import numpy as np
 from fastapi.testclient import TestClient
 from sklearn.metrics import f1_score, recall_score
 
@@ -12,6 +14,8 @@ from app.main import create_app
 from app.model import ModelRegistry
 from training.generate_data import build_datasets
 from training.train import train_models
+
+DATASET_DIR = Path(__file__).parents[3] / "datasets"
 
 
 def test_dataset_is_deterministic_grouped_and_has_gated_slice_support(tmp_path: Path) -> None:
@@ -168,6 +172,20 @@ def test_model_artifacts_are_byte_reproducible(tmp_path: Path) -> None:
         assert (first_dir / version / "manifest.json").read_bytes() == (
             second_dir / version / "manifest.json"
         ).read_bytes()
+
+
+def test_serialized_coefficients_are_normalized_for_cross_platform_builds(
+    tmp_path: Path,
+) -> None:
+    model_dir = tmp_path / "models"
+    train_models(dataset_dir=DATASET_DIR, model_dir=model_dir)
+
+    for version in ("baseline-v1", "candidate-v2", "known-bad-v1"):
+        bundle = joblib.load(model_dir / version / "model.joblib")
+        for pipeline in bundle.values():
+            classifier = pipeline.named_steps["classifier"]
+            np.testing.assert_array_equal(classifier.coef_, classifier.coef_.round(10))
+            np.testing.assert_array_equal(classifier.intercept_, classifier.intercept_.round(10))
 
 
 def test_known_bad_is_acceptable_in_aggregate_but_fails_typo_emergency_slice(

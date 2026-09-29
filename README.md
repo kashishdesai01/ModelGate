@@ -111,7 +111,7 @@ The checked-in golden set contains 180 cases, including 36 typo-heavy emergencie
 
 Reports record the exact golden-set SHA-256 and verify both local model artifact digests against their manifests before sending any evaluation request. The supported Compose workflow builds and serves those same artifacts; when evaluating an independently deployed remote classifier, operators must separately attest that its reported version maps to the same bytes.
 
-Model generation is byte-reproducible across separate Python processes. Training removes scikit-learn's process-local stop-word object-ID cache before serialization; a regression test and CI clean-diff check protect the checked-in artifacts.
+Model generation is byte-reproducible across separate Python processes and the supported ARM64/x86_64 build environments. Training removes scikit-learn's process-local stop-word object-ID cache and rounds solver coefficients below the observed BLAS noise floor before serialization; regression tests, a cross-architecture probe, and the CI clean-diff check protect the checked-in artifacts.
 
 Verified controlled-benchmark results:
 

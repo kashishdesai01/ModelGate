@@ -26,11 +26,19 @@ The first suggested `go-redis` version (`v9.7.0`) triggered live OSV advisory wa
 
 **Validation:** `govulncheck ./...` reports no reachable vulnerabilities, `pip-audit --skip-editable` reports no known vulnerabilities, and both language test suites run without warnings.
 
+## 4. Same-process reproducibility hid cross-architecture numeric noise
+
+The first artifact fix removed scikit-learn's process-local stop-word identity cache and proved byte equality across separate Python processes on one machine. The first real GitHub Actions run still failed because ARM64 and x86_64 BLAS implementations produced coefficient differences below `1e-11`, changing the serialized bytes without changing predictions.
+
+**Correction:** normalize fitted logistic-regression coefficients and intercepts to ten decimal places before serialization, below the observed platform noise floor but far below any decision-relevant difference.
+
+**Validation:** the regression suite enforces normalized serialized coefficients. Independent ARM64 and emulated Linux x86_64 training runs produce byte-identical model bundles and manifests, and CI regenerates the checked-in artifacts before evaluation.
+
 ## Verification policy
 
 - Tests are written before core behavior and must fail for the expected reason.
 - Concurrency claims require a real Postgres integration test.
 - The known-bad model must be rejected by an actual nonzero eval command.
 - Benchmark numbers are published only from saved raw output.
-- Model reproducibility requires byte-identical cross-process artifacts, not merely identical predictions.
+- Model reproducibility requires byte-identical cross-process and supported cross-architecture artifacts, not merely identical predictions.
 - AI-generated output is never accepted solely because it compiles.

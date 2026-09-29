@@ -61,7 +61,7 @@ def _fit_bundle(rows: list[dict[str, Any]], *, corrupt_typo_emergency: bool) -> 
     return {"category": category_model, "urgency": urgency_model}
 
 
-def _remove_process_local_serialization_state(bundle: dict[str, Pipeline]) -> None:
+def _normalize_serialization_state(bundle: dict[str, Pipeline]) -> None:
     for pipeline in bundle.values():
         vectorizer = pipeline.named_steps["tfidf"]
         # scikit-learn caches id(self.stop_words) after validation. Object IDs vary
@@ -69,6 +69,12 @@ def _remove_process_local_serialization_state(bundle: dict[str, Pipeline]) -> No
         # repeat the consistency check while keeping artifact bytes reproducible.
         if hasattr(vectorizer, "_stop_words_id"):
             vectorizer._stop_words_id = None
+        classifier = pipeline.named_steps["classifier"]
+        # Different BLAS implementations can vary below 1e-11 despite identical
+        # predictions. Quantizing below that noise floor makes artifacts portable
+        # across the supported ARM64 and x86_64 build environments.
+        classifier.coef_ = classifier.coef_.round(decimals=10)
+        classifier.intercept_ = classifier.intercept_.round(decimals=10)
 
 
 def train_models(dataset_dir: Path, model_dir: Path) -> None:
@@ -90,7 +96,7 @@ def train_models(dataset_dir: Path, model_dir: Path) -> None:
         destination.mkdir(parents=True, exist_ok=True)
         artifact = destination / "model.joblib"
         bundle = _fit_bundle(training_rows, corrupt_typo_emergency=corrupt)
-        _remove_process_local_serialization_state(bundle)
+        _normalize_serialization_state(bundle)
         joblib.dump(bundle, artifact, compress=3)
         manifest = {
             "model_id": "home-service-classifier",
